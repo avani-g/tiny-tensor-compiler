@@ -5,7 +5,8 @@ class IRNode():
         self.inputs = inputs 
 
     def __repr__(self):
-        return f"{self.name} = {self.op}({', '.join(self.inputs)})"
+        inputs = ", ".join(str(x) for x in self.inputs)
+        return f"{self.name} = {self.op}({inputs})"
 
 
 class IRGraph():
