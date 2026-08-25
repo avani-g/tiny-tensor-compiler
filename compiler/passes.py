@@ -113,6 +113,9 @@ def constant_folding(graph: IRGraph) -> bool:
 
             changed = True
 
+    if changed:
+        graph.rebuild_node_map()
+
     return changed
 
 
@@ -140,4 +143,9 @@ def dead_code_elimination(graph: IRGraph) -> bool:
         if node.name in live
     ]
 
-    return len(graph.nodes) != old_size
+    changed = len(graph.nodes) != old_size
+
+    if changed:
+        graph.rebuild_node_map()
+
+    return changed

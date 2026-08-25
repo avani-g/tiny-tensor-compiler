@@ -2,13 +2,21 @@ import torch
 import torch.nn as nn
 import torch.fx as fx
 
+from torch.fx.passes.shape_prop import ShapeProp
+
 from compiler.frontend import fx_to_ir
+
 from compiler.passes import (
     PassManager,
     algebraic_simplification,
     constant_folding,
     dead_code_elimination,
 )
+
+from compiler.fusion import find_linear_relu_fusions
+from compiler.fusion import fuse_linear_relu
+
+from compiler.backend import execute
 
 
 class TinyModel(nn.Module):
@@ -28,20 +36,57 @@ model = TinyModel()
 
 traced = fx.symbolic_trace(model)
 
+example_input = torch.randn(32, 10)
+
+ShapeProp(traced).propagate(example_input)
+
 print("FX graph:")
 print(traced.graph)
 
-ir_graph = fx_to_ir(traced)
+print("\nFX node metadata:")
+for node in traced.graph.nodes:
+    print(node.name, node.meta.get("tensor_meta"))
 
-manager = PassManager()
-manager.add_pass(algebraic_simplification)
-manager.add_pass(constant_folding)
-manager.add_pass(dead_code_elimination)
+ir_graph = fx_to_ir(traced)
 
 print("\nOriginal IR:")
 print(ir_graph)
+
+manager = PassManager()
+
+manager.add_pass(algebraic_simplification)
+manager.add_pass(constant_folding)
+manager.add_pass(dead_code_elimination)
+manager.add_pass(fuse_linear_relu)
 
 optimized_graph = manager.run(ir_graph)
 
 print("\nOptimized IR:")
 print(optimized_graph)
+
+fusion_candidates = find_linear_relu_fusions(optimized_graph)
+
+test_input = torch.randn(32, 10)
+
+model.eval()
+
+with torch.no_grad():
+    pytorch_output = model(test_input)
+
+
+with torch.no_grad():
+    compiled_output = execute(
+        optimized_graph,
+        model,
+        test_input,
+    )
+
+print(
+    "\nOutputs match:",
+    torch.allclose(
+        pytorch_output,
+        compiled_output,
+        rtol=1e-5,
+        atol=1e-6,
+    )
+)
