@@ -77,6 +77,9 @@ def algebraic_simplification(graph: IRGraph) -> bool:
         if node.name not in replacements
     ]
 
+    if changed:
+        graph.rebuild_node_map()
+
     return changed
 
 
