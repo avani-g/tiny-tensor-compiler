@@ -18,6 +18,8 @@ from compiler.fusion import fuse_linear_relu
 
 from compiler.backend import execute
 
+from compiler.analysis import analyze_graph
+
 
 class TinyModel(nn.Module):
     def __init__(self):
@@ -49,8 +51,11 @@ for node in traced.graph.nodes:
 
 ir_graph = fx_to_ir(traced)
 
-print("\nOriginal IR:")
+before_stats = analyze_graph(ir_graph)
+
+print("\nBefore optimization:")
 print(ir_graph)
+print(before_stats)
 
 manager = PassManager()
 
@@ -89,4 +94,29 @@ print(
         rtol=1e-5,
         atol=1e-6,
     )
+)
+
+after_stats = analyze_graph(optimized_graph)
+
+print("\nAfter optimization:")
+print(optimized_graph)
+print(after_stats)
+
+def reduction_percent(before, after):
+    if before == 0:
+        return 0.0
+
+    return ((before - after) / before) * 100
+
+
+print("\nOptimization results:")
+
+print(
+    "Node reduction:",
+    f"{reduction_percent(before_stats['node_count'], after_stats['node_count']):.1f}%"
+)
+
+print(
+    "Estimated peak memory reduction:",
+    f"{reduction_percent(before_stats['peak_memory_bytes'], after_stats['peak_memory_bytes']):.1f}%"
 )
